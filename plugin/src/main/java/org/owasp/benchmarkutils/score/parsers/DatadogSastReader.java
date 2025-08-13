@@ -25,9 +25,9 @@ import org.owasp.benchmarkutils.score.TestCaseResult;
 import org.owasp.benchmarkutils.score.TestSuiteResults;
 
 /**
- * This reader is made for the datadog-static-analyzer available on
- * <a href="https://github.com/DataDog/datadog-static-analyzer">...</a>.
- * It uses the SARIF file produces by the tool.
+ * This reader is made for the datadog-static-analyzer available on <a
+ * href="https://github.com/DataDog/datadog-static-analyzer">...</a>. It uses the SARIF file
+ * produces by the tool.
  */
 public class DatadogSastReader extends Reader {
     private static final String DATADOG_TOOL_NAME = "datadog-static-analyzer";
@@ -64,45 +64,125 @@ public class DatadogSastReader extends Reader {
      * @return the corresponding CWE identifier
      */
     private Type getTypeFromRuleId(String ruleId) {
-        if (ruleId.equalsIgnoreCase("java-security/cookies-secure-flag")
-                || ruleId.equalsIgnoreCase("java-security/cookies-http-only")) {
-            return Type.INSECURE_COOKIE;
-        }
-        if (ruleId.equalsIgnoreCase("java-security/avoid-random")) {
-            return Type.WEAK_RANDOMNESS;
-        }
-        if (ruleId.equalsIgnoreCase("java-security/sql-injection")) {
+        // SQL Injection - CWE-89
+        if (matchesAnyRule(
+                ruleId,
+                "sql-injection",
+                "sql-string-concatenation",
+                "sql-format-string",
+                "variable-sql-statement-injection")) {
             return Type.SQL_INJECTION;
         }
-        if (ruleId.equalsIgnoreCase("java-security/keygenerator-avoid-des")) {
-            return Type.WEAK_CIPHER;
-        }
-        if (ruleId.equalsIgnoreCase("java-security/ldap-injection")) {
-            return Type.LDAP_INJECTION;
-        }
-        if (ruleId.equalsIgnoreCase("java-security/command-injection")) {
+
+        // Command Injection - CWE-78
+        if (matchesAnyRule(
+                ruleId,
+                "command-injection",
+                "shell-injection",
+                "asyncio-subprocess-create-shell",
+                "asyncio-subprocess-exec",
+                "os-spawn",
+                "os-system",
+                "subprocess-shell-true")) {
             return Type.COMMAND_INJECTION;
         }
-        if (ruleId.equalsIgnoreCase("java-security/weak-message-digest-md5")
-                || ruleId.equalsIgnoreCase("java-security/weak-message-digest-sha1")) {
-            return Type.WEAK_HASH;
-        }
-        if (ruleId.equalsIgnoreCase("java-security/xml-parsing-xxe-xpath")
-                || ruleId.equalsIgnoreCase("java-security/tainted-xpath")) {
-            return Type.XPATH_INJECTION;
-        }
-        if (ruleId.contains("java-security") && ruleId.contains("xss")) {
+
+        // XSS - CWE-79
+        if (matchesAnyRule(
+                        ruleId,
+                        "xss-protection",
+                        "html-string-from-parameters",
+                        "responsewriter-no-fprintf",
+                        "unescape-template-data-js",
+                        "jinja-autoescape")
+                || (containsSecurityPrefix(ruleId) && ruleId.contains("xss"))) {
             return Type.XSS;
         }
-        if (ruleId.contains("java-security")
-                && ruleId.contains("trust")
-                && ruleId.contains("bound")) {
-            return Type.TRUST_BOUNDARY_VIOLATION;
+
+        // LDAP Injection - CWE-90
+        if (matchesAnyRule(ruleId, "ldap-injection")) {
+            return Type.LDAP_INJECTION;
         }
-        if (ruleId.equalsIgnoreCase("java-security/path-traversal")) {
+
+        // Path Traversal - CWE-22
+        if (matchesAnyRule(ruleId, "path-traversal", "taint-url")) {
             return Type.PATH_TRAVERSAL;
         }
+
+        // Weak Cipher - CWE-327
+        if (matchesAnyRule(
+                ruleId,
+                "keygenerator-avoid-des",
+                "import-des",
+                "ssl-v3-insecure",
+                "jwt-algorithm",
+                "tls-cipher",
+                "weak-cipher",
+                "use-standard-crypto",
+                "weak-ssl-protocols")) {
+            return Type.WEAK_CIPHER;
+        }
+
+        // Weak Hash - CWE-328
+        if (matchesAnyRule(
+                ruleId,
+                "weak-message-digest-md5",
+                "weak-message-digest-sha1",
+                "import-md5",
+                "import-sha1",
+                "weak-hash-algorithms",
+                "insecure-hash-functions")) {
+            return Type.WEAK_HASH;
+        }
+
+        // Weak Randomness - CWE-330
+        if (matchesAnyRule(ruleId, "avoid-random", "math-rand-insecure", "no-pseudo-random")) {
+            return Type.WEAK_RANDOMNESS;
+        }
+
+        // Trust Boundary Violation - CWE-501
+        if (matchesAnyRule(ruleId, "trust-boundaries")
+                || (containsSecurityPrefix(ruleId)
+                        && ruleId.contains("trust")
+                        && ruleId.contains("bound"))) {
+            return Type.TRUST_BOUNDARY_VIOLATION;
+        }
+
+        // Insecure Cookie - CWE-614 (only Secure flag related rules)
+        if (matchesAnyRule(
+                ruleId,
+                "cookies-secure-flag",
+                "cookie-secure-flag",
+                "session-secure",
+                "cookie-secure")) {
+            return Type.INSECURE_COOKIE;
+        }
+
+        // XPath Injection - CWE-643
+        if (matchesAnyRule(ruleId, "xml-parsing-xxe-xpath", "tainted-xpath", "xpath-injection")) {
+            return Type.XPATH_INJECTION;
+        }
+
         return null;
+    }
+
+    private boolean matchesAnyRule(String ruleId, String... ruleNames) {
+        for (String ruleName : ruleNames) {
+            if (ruleId.equalsIgnoreCase("java-security/" + ruleName)
+                    || ruleId.equalsIgnoreCase("go-security/" + ruleName)
+                    || ruleId.equalsIgnoreCase("python-security/" + ruleName)
+                    || ruleId.equalsIgnoreCase("csharp-security/" + ruleName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsSecurityPrefix(String ruleId) {
+        return ruleId.contains("java-security")
+                || ruleId.contains("go-security")
+                || ruleId.contains("python-security")
+                || ruleId.contains("csharp-security");
     }
 
     /**
@@ -162,7 +242,16 @@ public class DatadogSastReader extends Reader {
                     tcr.setCWE(t.number);
                     tcr.setCategory(t.id);
                 } else {
-                    continue;
+                    // If no direct mapping found, try to get CWE from properties
+                    int cweFromProperties = getCweFromProperties(result);
+                    if (cweFromProperties != 0) {
+                        tcr.setCWE(cweFromProperties);
+                        tcr.setCategory("unknown-" + cweFromProperties);
+                    } else {
+                        System.out.println(
+                                "WARNING: DatadogSast parser encountered unmapped rule: " + ruleId);
+                        continue;
+                    }
                 }
 
                 if (tcr.getCWE() == 0) {
