@@ -68,8 +68,6 @@ public class DatadogSastReader extends Reader {
         if (matchesAnyRule(
                 ruleId,
                 "sql-injection",
-                "sql-string-concatenation",
-                "sql-format-string",
                 "variable-sql-statement-injection")) {
             return Type.SQL_INJECTION;
         }
